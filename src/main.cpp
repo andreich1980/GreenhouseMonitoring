@@ -1,17 +1,15 @@
 #include <Arduino.h>
+#include "Blink.h"
 
 void setup()
 {
   Serial.begin(9600);
   Serial.println("Starting");
+  pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop()
 {
   // Normal mode: short blink once in 5 seconds
-  Serial.println("Blink");
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(50);
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(5000);
+  Blink(50, 5000);
 }
