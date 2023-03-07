@@ -1,44 +1,37 @@
 #include <Arduino.h>
 #include "../include/Led.h"
 
-class Led
+Led::Led(unsigned int LedPin)
 {
-public:
-    Led(unsigned int LedPin)
-    {
-        pin = LedPin;
-        pinMode(pin, OUTPUT);
-    }
+    pin = LedPin;
+    pinMode(pin, OUTPUT);
+}
 
-    void turnOn()
-    {
-        digitalWrite(pin, LOW);
-    }
+void Led::turnOn()
+{
+    digitalWrite(pin, LOW);
+}
 
-    void turnOff()
-    {
-        digitalWrite(pin, HIGH);
-    }
+void Led::turnOff()
+{
+    digitalWrite(pin, HIGH);
+}
 
-    void blink(int onTime, int offTime)
+void Led::blink(int onTime, int offTime)
+{
+    turnOn();
+    delay(onTime);
+    turnOff();
+    if (offTime > 0)
     {
-        turnOn();
-        delay(onTime);
-        turnOff();
-        if (offTime > 0)
-        {
-            delay(offTime);
-        }
+        delay(offTime);
     }
+}
 
-    void blink(int onTime, int offTime, int times)
+void Led::blink(int onTime, int offTime, int times)
+{
+    for (int i = 0; i < times; i++)
     {
-        for (int i = 0; i < times; i++)
-        {
-            blink(onTime, offTime);
-        }
+        blink(onTime, offTime);
     }
-
-private:
-    int pin;
-};
+}

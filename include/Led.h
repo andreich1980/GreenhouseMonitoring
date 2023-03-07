@@ -1,9 +1,12 @@
 #include <Arduino.h>
+
 #ifndef LED_H
 #define LED_H
 
 class Led
 {
+    int pin;
+
 public:
     Led(unsigned int LedPin);
     void turnOn();
