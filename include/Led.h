@@ -1,7 +1,6 @@
-#include <Arduino.h>
+#pragma once
 
-#ifndef LED_H
-#define LED_H
+#include <Arduino.h>
 
 class Led
 {
@@ -14,5 +13,3 @@ public:
     void blink(int onTime, int offTime = 0);
     void blink(int onTime, int offTime, int times);
 };
-
-#endif
