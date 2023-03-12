@@ -1,9 +1,12 @@
 #include <Arduino.h>
 #include <WiFiManager.h>
-#include <Led.h>
+#include "Led.h"
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <DHT.h>
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
 
 WiFiManager wifiManager;
 
@@ -21,6 +24,10 @@ byte temperature = 0;
 byte humidity = 0;
 void initNtpClient();
 
+// SD card
+#define SD_CS (D8)
+void initSdCard();
+
 void setup()
 {
   Serial.begin(115200);
@@ -30,6 +37,7 @@ void setup()
 
   initNtpClient();
   initDhtSensor();
+  initSdCard();
 }
 
 void loop()
@@ -55,4 +63,17 @@ void initDhtSensor()
 {
   pinMode(DHT_PIN, INPUT);
   dht.begin();
+}
+
+void initSdCard()
+{
+  if (!SD.begin(SD_CS))
+  {
+    Serial.println("SD Card mount failed.");
+    return;
+  }
+
+  Serial.println("SD Card info:");
+  Serial.printf("Type: %d", SD.type());
+  Serial.println();
 }
