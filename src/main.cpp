@@ -9,13 +9,17 @@ WiFiManager wifiManager;
 
 Led led(LED_BUILTIN);
 
+// NTP Client
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "ru.pool.ntp.org");
+void initDhtSensor();
 
+// DHT sensor
 uint8_t DHT_PIN = D1;
 DHT dht(DHT_PIN, DHT11);
 byte temperature = 0;
 byte humidity = 0;
+void initNtpClient();
 
 void setup()
 {
@@ -24,12 +28,8 @@ void setup()
 
   wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
 
-  timeClient.begin();
-  timeClient.setTimeOffset(3 * 60 * 60);            // +03:00
-  timeClient.setUpdateInterval(1 * 60 * 60 * 1000); // 1 hour in ms
-
-  pinMode(DHT_PIN, INPUT);
-  dht.begin();
+  initNtpClient();
+  initDhtSensor();
 }
 
 void loop()
@@ -42,4 +42,17 @@ void loop()
 
   Serial.printf("Time: %s, Temperature: %dC, Humidity: %d%%\n", timeClient.getFormattedTime().c_str(), temperature, humidity);
   delay(10000);
+}
+
+void initNtpClient()
+{
+  timeClient.begin();
+  timeClient.setTimeOffset(3 * 60 * 60);            // +03:00
+  timeClient.setUpdateInterval(1 * 60 * 60 * 1000); // 1 hour in ms
+}
+
+void initDhtSensor()
+{
+  pinMode(DHT_PIN, INPUT);
+  dht.begin();
 }
