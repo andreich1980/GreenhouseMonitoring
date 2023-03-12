@@ -3,15 +3,19 @@
 #include <Led.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
+#include <DHT.h>
 
 WiFiManager wifiManager;
 
 Led led(LED_BUILTIN);
 
 WiFiUDP ntpUDP;
-// Time offset: 3:00 (in seconds)
-// Sync time with server interval: 1 hour (in milliseconds)
-NTPClient timeClient(ntpUDP, "ru.pool.ntp.org", 3 * 60 * 60, 1 * 60 * 60 * 1000);
+NTPClient timeClient(ntpUDP, "ru.pool.ntp.org");
+
+uint8_t DHT_PIN = D1;
+DHT dht(DHT_PIN, DHT11);
+byte temperature = 0;
+byte humidity = 0;
 
 void setup()
 {
@@ -21,12 +25,21 @@ void setup()
   wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
 
   timeClient.begin();
+  timeClient.setTimeOffset(3 * 60 * 60);            // +03:00
+  timeClient.setUpdateInterval(1 * 60 * 60 * 1000); // 1 hour in ms
+
+  pinMode(DHT_PIN, INPUT);
+  dht.begin();
 }
 
 void loop()
 {
   led.blink(50);
   timeClient.update();
-  Serial.println(timeClient.getFormattedTime());
-  delay(5000);
+
+  temperature = (int)dht.readTemperature();
+  humidity = (int)dht.readHumidity();
+
+  Serial.printf("Time: %s, Temperature: %dC, Humidity: %d%%\n", timeClient.getFormattedTime().c_str(), temperature, humidity);
+  delay(10000);
 }
