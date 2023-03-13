@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <WiFiManager.h>
 #include "Led.h"
-#include <WiFiUdp.h>
-#include <NTPClient.h>
+#include "DateTime.h"
 #include <DHT.h>
 #include <FS.h>
 #include <SD.h>
@@ -12,21 +11,19 @@ WiFiManager wifiManager;
 
 Led led(LED_BUILTIN);
 
-// NTP Client
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "ru.pool.ntp.org");
-void initDhtSensor();
+DateTime dateTimeHelper;
 
 // DHT sensor
 uint8_t DHT_PIN = D1;
 DHT dht(DHT_PIN, DHT11);
 byte temperature = 0;
 byte humidity = 0;
-void initNtpClient();
+void initDhtSensor();
 
 // SD card
 #define SD_CS (D8)
 void initSdCard();
+void storeData(byte temperature, byte humidity);
 
 void setup()
 {
@@ -35,7 +32,7 @@ void setup()
 
   wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
 
-  initNtpClient();
+  dateTimeHelper.ntpInit();
   initDhtSensor();
   initSdCard();
 }
@@ -43,37 +40,65 @@ void setup()
 void loop()
 {
   led.blink(50);
-  timeClient.update();
 
   temperature = (int)dht.readTemperature();
   humidity = (int)dht.readHumidity();
+  storeData(temperature, humidity);
 
-  Serial.printf("Time: %s, Temperature: %dC, Humidity: %d%%\n", timeClient.getFormattedTime().c_str(), temperature, humidity);
-  delay(10000);
-}
-
-void initNtpClient()
-{
-  timeClient.begin();
-  timeClient.setTimeOffset(3 * 60 * 60);            // +03:00
-  timeClient.setUpdateInterval(1 * 60 * 60 * 1000); // 1 hour in ms
+  delay(2 * 60 * 1000); // 2min
 }
 
 void initDhtSensor()
 {
+  Serial.println("Init DHT sensor...");
   pinMode(DHT_PIN, INPUT);
   dht.begin();
 }
 
 void initSdCard()
 {
+  Serial.println("Init SD card...");
   if (!SD.begin(SD_CS))
   {
     Serial.println("SD Card mount failed.");
     return;
   }
+}
 
-  Serial.println("SD Card info:");
-  Serial.printf("Type: %d", SD.type());
-  Serial.println();
+void storeData(byte temperature, byte humidity)
+{
+  dateTimeHelper.ntpUpdateTime();
+
+  char *date = dateTimeHelper.getDateString();
+  char *time = dateTimeHelper.getTimeString();
+
+  Serial.printf(
+      "Time: %s %s, Temperature: %dC, Humidity: %d%%\n",
+      date,
+      dateTimeHelper.getTimeString(),
+      temperature,
+      humidity);
+
+  char filePath[40];
+  snprintf(filePath, 40, "/data/%s.jsonl", date);
+  File file = SD.open(filePath, FILE_WRITE);
+  if (!file)
+  {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+
+  char line[80];
+  snprintf(line, 80,
+           "{\"timestamp\":\"%s %s\",\"temperature\":%d,\"humidity\":%d}",
+           date,
+           dateTimeHelper.getTimeString(),
+           temperature,
+           humidity);
+
+  file.println(line);
+  file.close();
+
+  delete[] date;
+  delete[] time;
 }
