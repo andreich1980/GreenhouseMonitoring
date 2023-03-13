@@ -10,7 +10,7 @@ class DateTime
 private:
     unsigned long now;
 
-    char NTP_POOL[20] = "ru.pool.ntp.org";
+    char NTP_POOL[40] = "ru.pool.ntp.org";
     int NTP_OFFSET = 3 * 60 * 60;                 // +03:00
     int NTP_UPDATE_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour in ms
 
@@ -28,11 +28,24 @@ public:
      */
     void ntpInit()
     {
+        ntpInit(NTP_POOL, NTP_OFFSET, NTP_UPDATE_INTERVAL);
+    }
+    void ntpInit(char *server)
+    {
+        ntpInit(server, NTP_OFFSET, NTP_UPDATE_INTERVAL);
+    }
+    void ntpInit(char *server, int offset)
+    {
+        ntpInit(server, offset, NTP_UPDATE_INTERVAL);
+    }
+    void ntpInit(char *server, int offset, int updateInterval)
+    {
         Serial.println("Init NTP Client...");
 
         timeClient.begin();
-        timeClient.setTimeOffset(NTP_OFFSET);
-        timeClient.setUpdateInterval(NTP_UPDATE_INTERVAL);
+        timeClient.setPoolServerName(server);
+        timeClient.setTimeOffset(offset);
+        timeClient.setUpdateInterval(updateInterval);
     }
 
     /**
