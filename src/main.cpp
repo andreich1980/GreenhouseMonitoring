@@ -9,7 +9,7 @@
 
 WiFiManager wifiManager;
 
-Led led(LED_BUILTIN);
+Led led(LED_BUILTIN, true);
 
 DateTime dateTimeHelper;
 
@@ -45,7 +45,7 @@ void loop()
   humidity = (int)dht.readHumidity();
   storeData(temperature, humidity);
 
-  delay(2 * 60 * 1000); // 2min
+  delay(10 * 60 * 1000); // 10min
 }
 
 void initDhtSensor()
