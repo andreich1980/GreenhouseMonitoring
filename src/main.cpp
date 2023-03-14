@@ -6,8 +6,10 @@
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
+#include "Loggger.h"
 
 WiFiManager wifiManager;
+void initWiFiManager();
 
 Led led(LED_BUILTIN, true);
 
@@ -25,14 +27,17 @@ void initDhtSensor();
 void initSdCard();
 void storeData(byte temperature, byte humidity);
 
+Logger logger;
+
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Starting");
 
-  wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
+  initWiFiManager();
 
   dateTimeHelper.ntpInit();
+  logger.init(SD, "/logs/working.log", dateTimeHelper);
   initDhtSensor();
   initSdCard();
 }
@@ -41,11 +46,19 @@ void loop()
 {
   led.blink(50);
 
+  logger.info("Reading sensors...");
   temperature = (int)dht.readTemperature();
   humidity = (int)dht.readHumidity();
+
   storeData(temperature, humidity);
 
   delay(10 * 60 * 1000); // 10min
+}
+
+void initWiFiManager()
+{
+  wifiManager.setConfigPortalTimeout(60);
+  wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
 }
 
 void initDhtSensor()
@@ -67,24 +80,23 @@ void initSdCard()
 
 void storeData(byte temperature, byte humidity)
 {
+  logger.info("Storing sensors data...");
   dateTimeHelper.ntpUpdateTime();
 
   char *date = dateTimeHelper.getDateString();
   char *time = dateTimeHelper.getTimeString();
 
-  Serial.printf(
-      "Time: %s %s, Temperature: %dC, Humidity: %d%%\n",
-      date,
-      dateTimeHelper.getTimeString(),
-      temperature,
-      humidity);
+  char message[40];
+  sprintf(message, "Temperature: %dC, Humidity: %d%%", temperature, humidity);
+  logger.info(message);
 
   char filePath[40];
   snprintf(filePath, 40, "/data/%s.jsonl", date);
+  logger.info("Writing data to file");
   File file = SD.open(filePath, FILE_WRITE);
   if (!file)
   {
-    Serial.println("Failed to open file for appending");
+    logger.info("Failed to open file for appending");
     return;
   }
 
@@ -98,6 +110,8 @@ void storeData(byte temperature, byte humidity)
 
   file.println(line);
   file.close();
+
+  logger.info("Data saved.");
 
   delete[] date;
   delete[] time;
