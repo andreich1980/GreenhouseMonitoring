@@ -34,8 +34,10 @@ ESP8266WebServer server(80);
 const char *host = "greenhouse";
 static const char WWW_DIR[] = "/www";
 static const char DATA_DIR[] = "/data";
-static const char TEXT_PLAIN[] PROGMEM = "text/plain";
+static const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
+static const char MIME_JSON[] PROGMEM = "application/json";
 void initWebServer();
+void handleList();
 void handleNotFound();
 bool handleFileRead(String path);
 void replyNotFound(String msg);
@@ -153,7 +155,9 @@ void initWebServer()
     Serial.println(".local");
   }
 
+  server.on("/list", handleList);
   server.onNotFound(handleNotFound);
+  server.enableCORS(true);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -161,7 +165,7 @@ void initWebServer()
 
 void replyNotFound(String msg)
 {
-  server.send(404, FPSTR(TEXT_PLAIN), msg);
+  server.send(404, FPSTR(MIME_TEXT_PLAIN), msg);
 }
 
 bool handleFileRead(String path)
@@ -183,7 +187,7 @@ bool handleFileRead(String path)
   // Prevent downloading .jsonl files
   if (path.endsWith(".jsonl"))
   {
-    contentType = (String)TEXT_PLAIN;
+    contentType = (String)MIME_TEXT_PLAIN;
   }
   Serial.printf(" (%s)\n", contentType.c_str());
 
@@ -206,6 +210,26 @@ bool handleFileRead(String path)
   }
 
   return false;
+}
+
+void handleList()
+{
+  File dataDir = SD.open(DATA_DIR);
+
+  String list = "[";
+  while (File entry = dataDir.openNextFile())
+  {
+    list += String("\"");
+    list += entry.name();
+    list += String("\",");
+  }
+  if (list.endsWith(","))
+  {
+    list = list.substring(0, list.length() - 1);
+  }
+  list += "]";
+
+  server.send(200, FPSTR(MIME_JSON), list);
 }
 
 // Return file if exists, otherwise, return 404
