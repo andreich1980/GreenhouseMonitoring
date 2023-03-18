@@ -9,11 +9,14 @@ private:
     bool activeLow;
 
 public:
-    Led(unsigned int LedPin, bool activeLowMode = false)
+    Led(unsigned int LedPin, bool activeLowMode = false) : pin(LedPin), activeLow(activeLowMode)
     {
-        pin = LedPin;
-        activeLow = activeLowMode;
         pinMode(pin, OUTPUT);
+    }
+
+    bool isOn()
+    {
+        return digitalRead(pin) == (activeLow ? LOW : HIGH);
     }
 
     void turnOn()
@@ -26,22 +29,29 @@ public:
         digitalWrite(pin, activeLow ? HIGH : LOW);
     }
 
-    void blink(int onTime, int offTime = 0)
+    void toggle()
     {
-        turnOn();
-        delay(onTime);
-        turnOff();
-        if (offTime > 0)
+        if (isOn())
         {
-            delay(offTime);
+            turnOff();
+        }
+        else
+        {
+            turnOn();
         }
     }
 
-    void blink(int onTime, int offTime, int times)
+    void blink(int onTime, int offTime = 0, int times = 1)
     {
         for (int i = 0; i < times; i++)
         {
-            blink(onTime, offTime);
+            turnOn();
+            delay(onTime);
+            turnOff();
+            if (offTime > 0)
+            {
+                delay(offTime);
+            }
         }
     }
 };
