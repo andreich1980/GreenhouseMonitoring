@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import {
   Chart,
   CategoryScale,
@@ -13,6 +14,10 @@ import {
 import { Line } from 'react-chartjs-2'
 import { loadFileData, loadFilesList } from '../api'
 import { CHART_DATA_TEMPLATE, getChartOptions } from '../helpers'
+
+const Header = () => (
+  <h2 className="text-center text-lg font-semibold">Temperature & Humidity</h2>
+)
 
 const Charts = () => {
   const [isLoading, setIsLoading] = useState(true)
@@ -85,20 +90,10 @@ const Charts = () => {
 
   // Scroll chart to the very right once chart data loaded
   useEffect(() => {
-    if (!chartContainer.current) {
-      return
+    if (chartContainer.current) {
+      chartContainer.current.scrollLeft = chartContainer.current.scrollWidth
     }
-
-    chartContainer.current.scrollLeft = chartContainer.current.scrollWidth
   }, [chartData.labels.length])
-
-  if (isLoading) {
-    return <div className="text-center italic text-gray-500">Loading...</div>
-  }
-
-  if (!files.length) {
-    return <div>Theres no files with data</div>
-  }
 
   Chart.register(
     CategoryScale,
@@ -111,11 +106,29 @@ const Charts = () => {
     LineElement,
   )
 
+  if (isLoading) {
+    return (
+      <section>
+        <Header />
+        <div className="mt-10">
+          <ArrowPathIcon className="mx-auto h-8 w-8 animate-spin text-gray-500" />
+        </div>
+      </section>
+    )
+  }
+
+  if (!files[currentFileIndex].length) {
+    return (
+      <section>
+        <Header />
+        <p className="mt-6 text-center italic text-gray-500">Data not found</p>
+      </section>
+    )
+  }
+
   return (
     <section>
-      <h2 className="text-center text-lg font-semibold">
-        Temperature & Humidity
-      </h2>
+      <Header />
       <div ref={chartContainer} className="w-full overflow-x-auto">
         <div className="mx-auto h-96" style={{ width: chartWidth }}>
           <Line ref={chartRef} data={chartData} options={chartOptions} />
