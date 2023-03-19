@@ -1,3 +1,8 @@
+const COLORS = {
+  TEMPERATURE: '#dc2626',
+  HUMIDITY: '#0ea5e9',
+}
+
 /**
  * Sort the given array of file names in descending order
  * by the date from the filename.
@@ -22,7 +27,7 @@ export const CHART_DATA_TEMPLATE = {
     {
       label: 'Temperature',
       data: [],
-      borderColor: '#dc2626',
+      borderColor: COLORS.TEMPERATURE,
       borderWidth: 2,
       fill: false,
       cubicInterpolationMode: 'monotone',
@@ -32,7 +37,7 @@ export const CHART_DATA_TEMPLATE = {
     {
       label: 'Humidity',
       data: [],
-      borderColor: '#10b981',
+      borderColor: COLORS.HUMIDITY,
       borderWidth: 2,
       fill: false,
       cubicInterpolationMode: 'monotone',
@@ -47,38 +52,40 @@ export const getChartOptions = (xAxisTitle, xAxisLabels) => ({
   maintainAspectRatio: false,
   scales: {
     x: {
-      // type: 'time',
-      // time: {
-      //   tooltipFormat: 'Date',
-      // },
       title: {
         display: true,
         text: xAxisTitle,
       },
       ticks: {
-        callback: (value, index) => {
-          return index % 3 === 0 ? xAxisLabels[value] : ''
-        },
+        callback: (value, index) => (index % 2 === 0 ? xAxisLabels[value] : ''),
       },
     },
     temperature: {
-      title: { display: true, text: 'Temperature, C' },
+      title: {
+        display: true,
+        text: 'Temperature, C',
+        color: COLORS.TEMPERATURE,
+      },
       type: 'linear',
       display: true,
       position: 'left',
-      suggestedMin: 14,
-      suggestedMax: 23,
-      border: { color: '#dc2626' },
+      grace: '5%',
+      border: { color: COLORS.TEMPERATURE },
+      ticks: {
+        color: COLORS.TEMPERATURE,
+      },
     },
     humidity: {
-      title: { display: true, text: 'Humidity, %' },
+      title: { display: true, text: 'Humidity, %', color: COLORS.HUMIDITY },
       type: 'linear',
       display: true,
       position: 'right',
       grid: { drawOnChartArea: false },
-      suggestedMin: 36,
-      suggestedMax: 47,
-      border: { color: '#10b981' },
+      grace: '5%',
+      border: { color: COLORS.HUMIDITY },
+      ticks: {
+        color: COLORS.HUMIDITY,
+      },
     },
   },
   interaction: {
@@ -86,7 +93,6 @@ export const getChartOptions = (xAxisTitle, xAxisLabels) => ({
     mode: 'index',
   },
   plugins: {
-    title: { display: true, text: 'Temperature & Humidity' },
     decimation: { enabled: true, algorith: 'min-max' },
     legend: { display: false },
   },

@@ -22,6 +22,7 @@ const Charts = () => {
   const [chartOptions, setChartOptions] = useState({})
   const [chartWidth, setChartWidth] = useState('100%')
 
+  const chartContainer = useRef(null)
   const chartRef = useRef(null)
 
   useEffect(() => {
@@ -82,6 +83,15 @@ const Charts = () => {
     loadFileDataAndPrepare()
   }, [currentFileIndex])
 
+  // Scroll chart to the very right once chart data loaded
+  useEffect(() => {
+    if (!chartContainer.current) {
+      return
+    }
+
+    chartContainer.current.scrollLeft = chartContainer.current.scrollWidth
+  }, [chartData.labels.length])
+
   if (isLoading) {
     return <div className="text-center italic text-gray-500">Loading...</div>
   }
@@ -102,11 +112,16 @@ const Charts = () => {
   )
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="mx-auto h-96" style={{ width: chartWidth }}>
-        <Line ref={chartRef} data={chartData} options={chartOptions} />
+    <section>
+      <h2 className="text-center text-lg font-semibold">
+        Temperature & Humidity
+      </h2>
+      <div ref={chartContainer} className="w-full overflow-x-auto">
+        <div className="mx-auto h-96" style={{ width: chartWidth }}>
+          <Line ref={chartRef} data={chartData} options={chartOptions} />
+        </div>
       </div>
-    </div>
+    </section>
   )
 }
 
