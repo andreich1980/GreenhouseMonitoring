@@ -8,6 +8,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
+#include <ArduinoJson.h>
 #include "Loggger.h"
 
 void initWiFiManager();
@@ -127,15 +128,13 @@ void storeData(byte temperature, byte humidity)
     return;
   }
 
-  char line[80];
-  snprintf(line, 80,
-           "{\"timestamp\":\"%s %s\",\"temperature\":%d,\"humidity\":%d}",
-           date,
-           dateTimeHelper.getTimeString(),
-           temperature,
-           humidity);
+  StaticJsonDocument<100> doc;
+  doc["timestamp"] = std::string(date) + " " + time;
+  doc["temperature"] = temperature;
+  doc["humidity"] = humidity;
+  serializeJson(doc, file);
+  file.println();
 
-  file.println(line);
   file.close();
 
   logger.info("Data saved.");
