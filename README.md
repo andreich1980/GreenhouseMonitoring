@@ -9,7 +9,9 @@ The config file should be stored on the SD card in the `/config.json` file.
 {
   "hostname": "greenhouse",
   "telegram_bot_token": "XXXXXXXXXX:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  "chat_id": "XXXXXXXXXX"
+  "telegram_chat_id": "XXXXXXXXXX",
+  "temperature_min": 16,
+  "temperature_max": 30,
 }
 ```
 
@@ -17,7 +19,9 @@ The config file should be stored on the SD card in the `/config.json` file.
 
 * `hostname` (string): The host name for the web server. This will be used to access the server from other devices on the same network. The format for accessing the server will be <hostname>.local.
 * `telegram_bot_token` (string): The API token for the Telegram bot that will be used for notifications.
-* `chat_id` (string): The chat ID for the Telegram chat that will receive notifications.
+* `telegram_chat_id` (string): The chat ID for the Telegram chat that will receive notifications.
+Use [@myidbot](https://t.me/myidbot) to find out the chat ID of an individual or a group.
+* `temperature_min`, `temperature_max` (integer): When the temperature goes out of these boundaries, the bot will send a notification.
 
 ## Build web interface
 
