@@ -31,8 +31,15 @@ void storeData(byte temperature, byte humidity);
 
 Logger logger;
 
+struct Config
+{
+  char hostname[20];
+};
+Config config;
+const char *configFileName = "/config.json";
+void initConfig();
+
 ESP8266WebServer server(80);
-const char *host = "greenhouse";
 static const char WWW_DIR[] = "/www";
 static const char DATA_DIR[] = "/data";
 static const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
@@ -56,6 +63,8 @@ void setup()
   logger.init(SD, "/logs/working.log", dateTimeHelper);
   initDhtSensor();
   initSdCard();
+
+  initConfig();
 
   initWebServer();
   led.blink(50, 100, 5);
@@ -143,14 +152,57 @@ void storeData(byte temperature, byte humidity)
   delete[] time;
 }
 
+void initConfig()
+{
+  File file = SD.open(configFileName);
+
+  StaticJsonDocument<100> doc;
+
+  DeserializationError error = deserializeJson(doc, file);
+  if (!error)
+  {
+    logger.info("Loaded config file.");
+  }
+  else
+  {
+    logger.error("Failed to read config file, using default configuration.");
+  }
+
+  file.close();
+
+  strlcpy(config.hostname, doc["hostname"] | "greenhouse", sizeof(config.hostname));
+
+  if (!SD.exists(configFileName))
+  {
+    File file = SD.open(configFileName, FILE_WRITE);
+    if (!file)
+    {
+      logger.error("Failed to store config file.");
+      return;
+    }
+
+    doc["hostname"] = config.hostname;
+    if (serializeJsonPretty(doc, file))
+    {
+      logger.info("Config file stored");
+    }
+    else
+    {
+      logger.error("Failed to store config file.");
+    }
+
+    file.close();
+  }
+}
+
 void initWebServer()
 {
-  if (MDNS.begin(host))
+  if (MDNS.begin(config.hostname))
   {
     MDNS.addService("http", "tcp", 80);
     Serial.println("MDNS responder started");
     Serial.print("You can now connect to http://");
-    Serial.print(host);
+    Serial.print(config.hostname);
     Serial.println(".local");
   }
 
