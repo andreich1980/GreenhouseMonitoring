@@ -1,5 +1,28 @@
 # Greenhouse monitoring
 
+## Config file
+
+The application uses a config file to read important settings.
+The config file should be stored on the SD card in the `/config.json` file.
+
+```json
+{
+  "hostname": "greenhouse",
+  "telegram_bot_token": "XXXXXXXXXX:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "telegram_chat_id": "XXXXXXXXXX",
+  "temperature_min": 16,
+  "temperature_max": 30,
+}
+```
+
+### Configuration options
+
+* `hostname` (string): The host name for the web server. This will be used to access the server from other devices on the same network. The format for accessing the server will be <hostname>.local.
+* `telegram_bot_token` (string): The API token for the Telegram bot that will be used for notifications.
+* `telegram_chat_id` (string): The chat ID for the Telegram chat that will receive notifications.
+Use [@myidbot](https://t.me/myidbot) to find out the chat ID of an individual or a group.
+* `temperature_min`, `temperature_max` (integer): When the temperature goes out of these boundaries, the bot will send a notification.
+
 ## Build web interface
 
 ```shell

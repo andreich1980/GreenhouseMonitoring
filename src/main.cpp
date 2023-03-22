@@ -8,7 +8,9 @@
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
+#include <ArduinoJson.h>
 #include "Loggger.h"
+#include <FastBot.h>
 
 void initWiFiManager();
 
@@ -30,8 +32,19 @@ void storeData(byte temperature, byte humidity);
 
 Logger logger;
 
+struct Config
+{
+  char hostname[20];
+  char telegramBotToken[50];
+  char telegramChatId[10];
+  unsigned int minTemperature;
+  unsigned int maxTemperature;
+};
+Config config;
+const char *configFileName = "/config.json";
+void initConfig();
+
 ESP8266WebServer server(80);
-const char *host = "greenhouse";
 static const char WWW_DIR[] = "/www";
 static const char DATA_DIR[] = "/data";
 static const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
@@ -43,6 +56,10 @@ bool handleFileRead(String path);
 void replyNotFound(String msg);
 esp8266::polledTimeout::periodicMs timeout_10s(10 * 1000);
 esp8266::polledTimeout::periodicMs timeout_10min(10 * 60 * 1000);
+
+FastBot bot;
+void initTelegramBot();
+void telegramNotifications(byte temperature, byte humidity);
 
 void setup()
 {
@@ -56,7 +73,12 @@ void setup()
   initDhtSensor();
   initSdCard();
 
+  initConfig();
+
   initWebServer();
+
+  initTelegramBot();
+
   led.blink(50, 100, 5);
 }
 
@@ -72,6 +94,8 @@ void loop()
     humidity = (int)dht.readHumidity();
 
     storeData(temperature, humidity);
+
+    telegramNotifications(temperature, humidity);
   }
 
   if (timeout_10s)
@@ -127,15 +151,13 @@ void storeData(byte temperature, byte humidity)
     return;
   }
 
-  char line[80];
-  snprintf(line, 80,
-           "{\"timestamp\":\"%s %s\",\"temperature\":%d,\"humidity\":%d}",
-           date,
-           dateTimeHelper.getTimeString(),
-           temperature,
-           humidity);
+  StaticJsonDocument<100> doc;
+  doc["timestamp"] = std::string(date) + " " + time;
+  doc["temperature"] = temperature;
+  doc["humidity"] = humidity;
+  serializeJson(doc, file);
+  file.println();
 
-  file.println(line);
   file.close();
 
   logger.info("Data saved.");
@@ -144,14 +166,97 @@ void storeData(byte temperature, byte humidity)
   delete[] time;
 }
 
+void initConfig()
+{
+  File file = SD.open(configFileName);
+
+  StaticJsonDocument<256> doc;
+
+  DeserializationError error = deserializeJson(doc, file);
+  if (error)
+  {
+    logger.error("Failed to read config file, using default configuration.");
+    logger.error(error.c_str());
+  }
+  else
+  {
+    logger.info("Loaded config file.");
+    // debug
+    // serializeJsonPretty(doc, Serial);
+    // Serial.println();
+  }
+
+  file.close();
+
+  strlcpy(config.hostname, doc["hostname"] | "greenhouse", sizeof(config.hostname));
+  strlcpy(config.telegramBotToken, doc["telegram_bot_token"] | "", sizeof(config.telegramBotToken));
+  strlcpy(config.telegramChatId, doc["telegram_chat_id"] | "", sizeof(config.telegramChatId));
+  config.minTemperature = doc["min_temperature"] | 16;
+  config.maxTemperature = doc["max_temperature"] | 30;
+
+  if (!config.telegramBotToken)
+  {
+    logger.error("Telegram Bot API Token not found in the config file.");
+  }
+
+  if (!SD.exists(configFileName))
+  {
+    File file = SD.open(configFileName, FILE_WRITE);
+    if (!file)
+    {
+      logger.error("Failed to store config file.");
+      return;
+    }
+
+    doc["hostname"] = config.hostname;
+    doc["telegram_bot_token"] = config.telegramBotToken;
+    doc["telegram_chat_id"] = config.telegramChatId;
+    doc["min_temperature"] = config.minTemperature;
+    doc["max_temperature"] = config.maxTemperature;
+    if (serializeJsonPretty(doc, file))
+    {
+      logger.info("Config file stored");
+    }
+    else
+    {
+      logger.error("Failed to store config file.");
+    }
+
+    file.close();
+  }
+}
+
+void initTelegramBot()
+{
+  bot.setToken(config.telegramBotToken);
+  bot.setChatID(config.telegramChatId);
+  bot.sendMessage("Greenhouse Tracker started");
+}
+
+void telegramNotifications(byte temperature, byte humidity)
+{
+  String data = "Temperature: " + String(temperature) + "°C";
+  data += '\n';
+  data += "Humidity: " + String(humidity) + "%";
+
+  if (temperature < config.minTemperature)
+  {
+    bot.sendMessage("🥶 It's too cold in the greenhouse!\n" + data);
+  }
+  else if (temperature > config.maxTemperature)
+  {
+    bot.sendMessage("🥵 It's too hot in the greenhouse!\n" + data);
+  }
+}
+
 void initWebServer()
 {
-  if (MDNS.begin(host))
+  if (MDNS.begin(config.hostname))
   {
     MDNS.addService("http", "tcp", 80);
     Serial.println("MDNS responder started");
     Serial.print("You can now connect to http://");
-    Serial.print(host);
+    Serial.print(config.hostname);
     Serial.println(".local");
   }
 
@@ -183,7 +288,6 @@ bool handleFileRead(String path)
   }
 
   String contentType = mime::getContentType(path);
-  Serial.printf(" (%s)\n", contentType.c_str());
   // Prevent downloading .jsonl files
   if (path.endsWith(".jsonl"))
   {
