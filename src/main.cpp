@@ -230,6 +230,7 @@ void initTelegramBot()
 {
   bot.setToken(config.telegramBotToken);
   bot.setChatID(config.telegramChatId);
+  bot.sendMessage("Greenhouse Tracker started");
 }
 
 void telegramNotifications(byte temperature, byte humidity)
