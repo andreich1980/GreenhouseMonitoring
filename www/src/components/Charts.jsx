@@ -14,6 +14,14 @@ import {
 import { Line } from 'react-chartjs-2'
 import { loadFileData, loadFilesList } from '../api'
 import { CHART_DATA_TEMPLATE, getChartOptions } from '../helpers'
+import FileSelector from './FileSelector'
+
+const prepareFilesForSelector = (files) => {
+  return files.map((file, index) => {
+    const date = file.split('.')[0]
+    return { index, value: new Date(date).toLocaleDateString() }
+  })
+}
 
 const Header = () => (
   <h2 className="text-center text-lg font-semibold">Temperature & Humidity</h2>
@@ -22,6 +30,7 @@ const Header = () => (
 const Charts = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [files, setFiles] = useState([])
+  const [datesList, setDatesList] = useState([])
   const [currentFileIndex, setCurrentFileIndex] = useState(null)
   const [chartData, setChartData] = useState(CHART_DATA_TEMPLATE)
   const [chartOptions, setChartOptions] = useState({})
@@ -33,8 +42,10 @@ const Charts = () => {
   useEffect(() => {
     async function loadFileListAndPrepare() {
       try {
-        const files = await loadFilesList('http://greenhouse.local/list')
-        setFiles(files)
+        // TODO: Create a dummy data in the website local folder to avoid using absolute paths
+        const filesList = await loadFilesList('http://greenhouse.local/list')
+        setFiles(filesList)
+        setDatesList(prepareFilesForSelector(filesList))
         setCurrentFileIndex(0)
       } catch (error) {
         console.error(error)
@@ -78,7 +89,9 @@ const Charts = () => {
             : '100%',
         )
 
-        chartRef.current.update()
+        if (chartRef.current) {
+          chartRef.current.update()
+        }
       } catch (error) {
         console.error(error)
       } finally {
@@ -109,6 +122,7 @@ const Charts = () => {
   if (isLoading) {
     return (
       <section>
+        <FileSelector />
         <Header />
         <div className="mt-10">
           <ArrowPathIcon className="mx-auto h-8 w-8 animate-spin text-gray-500" />
@@ -120,14 +134,24 @@ const Charts = () => {
   if (!files[currentFileIndex].length) {
     return (
       <section>
+        <FileSelector />
         <Header />
         <p className="mt-6 text-center italic text-gray-500">Data not found</p>
       </section>
     )
   }
 
+  const handleChange = ({ index }) => {
+    setCurrentFileIndex(index)
+  }
+
   return (
     <section>
+      <FileSelector
+        datesList={datesList}
+        currentIndex={currentFileIndex}
+        onChange={handleChange}
+      />
       <Header />
       <div ref={chartContainer} className="w-full overflow-x-auto">
         <div className="mx-auto h-96" style={{ width: chartWidth }}>
