@@ -258,6 +258,7 @@ void initWebServer()
     Serial.print("You can now connect to http://");
     Serial.print(config.hostname);
     Serial.println(".local");
+    Serial.println();
   }
 
   server.on("/list", handleList);

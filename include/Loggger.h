@@ -54,7 +54,7 @@ public:
 
         if (!file)
         {
-            Serial.printf("Error opening log file %s", filepathWithDate.c_str());
+            Serial.printf("Error opening log file %s\n", filepathWithDate.c_str());
             return;
         }
 
