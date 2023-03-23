@@ -47,15 +47,11 @@ export const CHART_DATA_TEMPLATE = {
   ],
 }
 
-export const getChartOptions = (xAxisTitle, xAxisLabels) => ({
+export const getChartOptions = (xAxisLabels) => ({
   responsive: true,
   maintainAspectRatio: false,
   scales: {
     x: {
-      title: {
-        display: true,
-        text: xAxisTitle,
-      },
       ticks: {
         callback: (value, index) => (index % 2 === 0 ? xAxisLabels[value] : ''),
       },

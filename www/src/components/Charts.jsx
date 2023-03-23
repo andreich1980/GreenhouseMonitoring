@@ -16,21 +16,13 @@ import { loadFileData, loadFilesList } from '../api'
 import { CHART_DATA_TEMPLATE, getChartOptions } from '../helpers'
 import FileSelector from './FileSelector'
 
-const prepareFilesForSelector = (files) => {
-  return files.map((file, index) => {
-    const date = file.split('.')[0]
-    return { index, value: new Date(date).toLocaleDateString() }
-  })
-}
-
 const Header = () => (
   <h2 className="text-center text-lg font-semibold">Temperature & Humidity</h2>
 )
 
 const Charts = () => {
   const [isLoading, setIsLoading] = useState(true)
-  const [files, setFiles] = useState([])
-  const [datesList, setDatesList] = useState([])
+  const [filesList, setFilesList] = useState([])
   const [currentFileIndex, setCurrentFileIndex] = useState(null)
   const [chartData, setChartData] = useState(CHART_DATA_TEMPLATE)
   const [chartOptions, setChartOptions] = useState({})
@@ -42,10 +34,15 @@ const Charts = () => {
   useEffect(() => {
     async function loadFileListAndPrepare() {
       try {
-        // TODO: Create a dummy data in the website local folder to avoid using absolute paths
-        const filesList = await loadFilesList('http://greenhouse.local/list')
-        setFiles(filesList)
-        setDatesList(prepareFilesForSelector(filesList))
+        // TODO: Create dummy data in the website local folder to avoid using absolute paths
+        const files = await loadFilesList('http://greenhouse.local/list')
+        setFilesList(
+          files.map((file, index) => ({
+            index,
+            file,
+            date: new Date(file.split('.')[0]).toLocaleDateString(),
+          })),
+        )
         setCurrentFileIndex(0)
       } catch (error) {
         console.error(error)
@@ -58,17 +55,17 @@ const Charts = () => {
 
   useEffect(() => {
     async function loadFileDataAndPrepare() {
-      if (currentFileIndex == null || !files[currentFileIndex]) {
+      if (currentFileIndex == null || !filesList[currentFileIndex]) {
         return
       }
 
       setIsLoading(true)
       try {
         const jsonData = await loadFileData(
-          `http://greenhouse.local/data/${files[currentFileIndex]}`,
+          `http://greenhouse.local/data/${filesList[currentFileIndex].file}`,
         )
 
-        const chartData = jsonData.reduce(
+        const chartRecordsList = jsonData.reduce(
           (data, { time, temperature, humidity }) => {
             data.labels.push(time)
             data.datasets[0].data.push({ x: time, y: temperature })
@@ -77,15 +74,12 @@ const Charts = () => {
           },
           CHART_DATA_TEMPLATE,
         )
-        chartData.xAxisTitle = new Date(
-          files[currentFileIndex].split('.')[0],
-        ).toLocaleDateString()
 
-        setChartData(chartData)
-        setChartOptions(getChartOptions(chartData.xAxisTitle, chartData.labels))
+        setChartData(chartRecordsList)
+        setChartOptions(getChartOptions(chartRecordsList.labels))
         setChartWidth(
-          chartData.labels.length > 15
-            ? chartData.labels.length * 30 + 'px'
+          chartRecordsList.labels.length > 15
+            ? chartRecordsList.labels.length * 30 + 'px'
             : '100%',
         )
 
@@ -108,17 +102,6 @@ const Charts = () => {
     }
   }, [chartData.labels.length])
 
-  Chart.register(
-    CategoryScale,
-    LinearScale,
-    TimeScale,
-    Legend,
-    Title,
-    Tooltip,
-    PointElement,
-    LineElement,
-  )
-
   if (isLoading) {
     return (
       <section>
@@ -131,7 +114,7 @@ const Charts = () => {
     )
   }
 
-  if (!files[currentFileIndex].length) {
+  if (!filesList.length || !chartData.labels.length) {
     return (
       <section>
         <FileSelector />
@@ -141,14 +124,23 @@ const Charts = () => {
     )
   }
 
-  const handleChange = ({ index }) => {
-    setCurrentFileIndex(index)
-  }
+  const handleChange = ({ index }) => setCurrentFileIndex(index)
+
+  Chart.register(
+    CategoryScale,
+    LinearScale,
+    TimeScale,
+    Legend,
+    Title,
+    Tooltip,
+    PointElement,
+    LineElement,
+  )
 
   return (
     <section>
       <FileSelector
-        datesList={datesList}
+        filesList={filesList}
         currentIndex={currentFileIndex}
         onChange={handleChange}
       />
