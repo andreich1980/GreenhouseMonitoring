@@ -12,6 +12,8 @@ The config file should be stored on the SD card in the `/config.json` file.
   "telegram_chat_id": "XXXXXXXXXX",
   "temperature_min": 16,
   "temperature_max": 30,
+  "thingspeak_channel_id": 1111111,
+  "thingspeak_write_api_key": "XXXXXXXXXXXXXXXX"
 }
 ```
 
@@ -22,6 +24,8 @@ The config file should be stored on the SD card in the `/config.json` file.
 * `telegram_chat_id` (string): The chat ID for the Telegram chat that will receive notifications.
 Use [@myidbot](https://t.me/myidbot) to find out the chat ID of an individual or a group.
 * `temperature_min`, `temperature_max` (integer): When the temperature goes out of these boundaries, the bot will send a notification.
+* `thingspeak_channel_id` (integer): Channel ID on [ThingSpeak.com](https://thingspeak.com).
+* `thingspeak_write_api_key` (integer): Write API Key for the channel.
 
 ## Build web interface
 

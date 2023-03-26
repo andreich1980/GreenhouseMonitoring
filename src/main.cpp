@@ -11,6 +11,8 @@
 #include <ArduinoJson.h>
 #include "Loggger.h"
 #include <FastBot.h>
+#include <ESP8266WiFi.h>
+#include <ThingSpeak.h>
 
 void initWiFiManager();
 
@@ -39,6 +41,8 @@ struct Config
   char telegramChatId[10];
   unsigned int minTemperature;
   unsigned int maxTemperature;
+  unsigned long thingSpeakChannelId;
+  char thingSpeakChannelWriteApiKey[17];
 };
 Config config;
 const char *configFileName = "/config.json";
@@ -61,6 +65,10 @@ FastBot bot;
 void initTelegramBot();
 void telegramNotifications(byte temperature, byte humidity);
 
+// ThingSpeak
+WiFiClient client;
+void sendToThingsSpeak(byte temperature, byte humidity);
+
 void setup()
 {
   Serial.begin(115200);
@@ -79,6 +87,8 @@ void setup()
 
   initTelegramBot();
 
+  ThingSpeak.begin(client);
+
   led.blink(50, 100, 5);
 }
 
@@ -94,6 +104,8 @@ void loop()
     humidity = (int)dht.readHumidity();
 
     storeData(temperature, humidity);
+
+    sendToThingsSpeak(temperature, humidity);
 
     telegramNotifications(temperature, humidity);
   }
@@ -169,7 +181,7 @@ void initConfig()
 {
   File file = SD.open(configFileName);
 
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
 
   DeserializationError error = deserializeJson(doc, file);
   if (error)
@@ -192,10 +204,17 @@ void initConfig()
   strlcpy(config.telegramChatId, doc["telegram_chat_id"] | "", sizeof(config.telegramChatId));
   config.minTemperature = doc["min_temperature"] | 16;
   config.maxTemperature = doc["max_temperature"] | 30;
+  config.thingSpeakChannelId = doc["thingspeak_channel_id"] | 0;
+  strlcpy(config.thingSpeakChannelWriteApiKey, doc["thingspeak_write_api_key"] | "", sizeof(config.thingSpeakChannelWriteApiKey));
 
   if (!config.telegramBotToken)
   {
     logger.error("Telegram Bot API Token not found in the config file.");
+  }
+
+  if (!config.thingSpeakChannelWriteApiKey || !config.thingSpeakChannelWriteApiKey)
+  {
+    logger.error("ThingSpeak integration data not found in the config file.");
   }
 
   if (!SD.exists(configFileName))
@@ -212,6 +231,8 @@ void initConfig()
     doc["telegram_chat_id"] = config.telegramChatId;
     doc["min_temperature"] = config.minTemperature;
     doc["max_temperature"] = config.maxTemperature;
+    doc["thingspeak_channel_id"] = config.thingSpeakChannelId;
+    doc["thingspeak_write_api_key"] = config.thingSpeakChannelWriteApiKey;
     if (serializeJsonPretty(doc, file))
     {
       logger.info("Config file stored");
@@ -373,4 +394,28 @@ void handleNotFound()
   Serial.print(message);
 
   return replyNotFound(message);
+}
+
+void sendToThingsSpeak(byte temperature, byte humidity)
+{
+  if (!config.thingSpeakChannelId)
+  {
+    return;
+  }
+
+  logger.info("ThingSpeak: sending data... ");
+
+  ThingSpeak.setField(1, temperature);
+  ThingSpeak.setField(2, humidity);
+
+  int responseCode = ThingSpeak.writeFields(config.thingSpeakChannelId, config.thingSpeakChannelWriteApiKey);
+  if (responseCode == 200)
+  {
+    logger.info("ThingSpeak: Data sent.");
+    return;
+  }
+
+  char errorMsg[50];
+  snprintf(errorMsg, sizeof(errorMsg), "ThingSpeak: Failed. HTTP error code %d", responseCode);
+  logger.error(errorMsg);
 }
