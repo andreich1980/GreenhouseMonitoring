@@ -1,85 +1,96 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WiFiUdp.h>
-#include <NTPClient.h>
-#include <TimeLib.h>
 
 class DateTime
 {
 private:
-    unsigned long now;
-
-    char NTP_POOL[40] = "ru.pool.ntp.org";
-    int NTP_OFFSET = 3 * 60 * 60;                 // +03:00
-    int NTP_UPDATE_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour in ms
-
-    WiFiUDP ntpUDP;
-    NTPClient timeClient;
+    const char *NTP_POOL = "ru.pool.ntp.org";
+    const char *NTP_OFFSET = "MSK-3";
 
 public:
-    DateTime() : timeClient(ntpUDP)
-    {
-        //
-    }
+    DateTime() {}
 
     /**
-     * Init NTP Client
+     * Initialize NTP client with default parameters.
      */
     void ntpInit()
     {
-        ntpInit(NTP_POOL, NTP_OFFSET, NTP_UPDATE_INTERVAL);
-    }
-    void ntpInit(char *server)
-    {
-        ntpInit(server, NTP_OFFSET, NTP_UPDATE_INTERVAL);
-    }
-    void ntpInit(char *server, int offset)
-    {
-        ntpInit(server, offset, NTP_UPDATE_INTERVAL);
-    }
-    void ntpInit(char *server, int offset, int updateInterval)
-    {
-        Serial.println("Init NTP Client...");
-
-        timeClient.begin();
-        timeClient.setPoolServerName(server);
-        timeClient.setTimeOffset(offset);
-        timeClient.setUpdateInterval(updateInterval);
+        ntpInit(NTP_POOL, NTP_OFFSET);
     }
 
     /**
-     * Update time from NTP server
+     * Initialize NTP client with custom NTP server and offset.
+     * Waits until the time is synced.
+     * @param server NTP server to use
+     * @param offset Timezone offset from UTC in POSIX TZ format, e.g. "PST8PDT", "MSK"
      */
-    void ntpUpdateTime()
+    void ntpInit(const char *server, const char *offset)
     {
-        timeClient.update();
-        now = timeClient.getEpochTime();
+        Serial.println("Syncing time with NTP server...");
+        Serial.println("Server: " + String(server) + ", Offset: " + String(offset));
+
+        configTime(offset, 0, server);
+
+        Serial.print("Waiting for time to be set");
+        // check if time is set after Jan 12 2001
+        time_t now = time(nullptr);
+        while (now < 1000000000)
+        {
+            delay(1000);
+            Serial.print(".");
+            now = time(nullptr);
+        }
+        Serial.println();
+
+        struct tm *timeinfo = localtime(&now);
+        char timeStr[20];
+        strftime(timeStr, sizeof(timeStr), "%F %T", timeinfo);
+        Serial.println("Time is set to " + String(timeStr));
     }
 
     /**
-     * Return date in YYYY-MM-DD format
+     * Return the current date in `YYYY-MM-DD` format.
+     * @return A newly allocated string containing the date.
      */
     char *getDateString()
     {
-        setTime((time_t)timeClient.getEpochTime());
+        time_t now = time(nullptr);
+        struct tm *timeinfo = localtime(&now);
 
-        char *date = new char[11];
-        snprintf(date, 11, "%4d-%02d-%02d", year(), month(), day());
+        char *dateStr = new char[11];
+        strftime(dateStr, 11, "%F", timeinfo);
 
-        return date;
+        return dateStr;
     }
 
     /**
-     * Return time in HH:mm:ss format
+     * Return the current time in `HH:mm:ss` format.
+     * @return A newly allocated string containing the time.
      */
     char *getTimeString()
     {
-        setTime((time_t)timeClient.getEpochTime());
+        time_t now = time(nullptr);
+        struct tm *timeinfo = localtime(&now);
 
-        char *time = new char[8];
-        snprintf(time, 10, "%02d:%02d:%02d", hour(), minute(), second());
+        char *timeStr = new char[9];
+        strftime(timeStr, 9, "%T", timeinfo);
 
-        return time;
+        return timeStr;
+    }
+
+    /**
+     * Return the current date and time in `YYYY-MM-DD HH:mm:ss` format.
+     * @return A newly allocated string containing the time.
+     */
+    char *getDateTimeString()
+    {
+        time_t now = time(nullptr);
+        struct tm *timeinfo = localtime(&now);
+
+        char *dateTimeStr = new char[20];
+        strftime(dateTimeStr, 20, "%F %T", timeinfo);
+
+        return dateTimeStr;
     }
 };

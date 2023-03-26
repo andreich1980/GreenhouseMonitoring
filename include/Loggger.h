@@ -38,13 +38,12 @@ public:
 
     void log(const char *message, const char *level)
     {
-        dateTimeHelper->ntpUpdateTime();
-
+        std::string dateTimeString(dateTimeHelper->getDateTimeString());
         std::string dateString(dateTimeHelper->getDateString());
-        std::string timeString(dateTimeHelper->getTimeString());
+
         std::string levelString(level);
         std::string preparedMessage(message);
-        preparedMessage = dateString + " " + timeString + " [" + levelString + "] " + preparedMessage;
+        preparedMessage = dateTimeString + " [" + levelString + "] " + preparedMessage;
 
         Serial.println(preparedMessage.c_str());
         std::string filepathWithDate(filepath);
