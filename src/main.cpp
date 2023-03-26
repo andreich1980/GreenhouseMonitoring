@@ -132,7 +132,6 @@ void initSdCard()
 void storeData(byte temperature, byte humidity)
 {
   logger.info("Storing sensors data...");
-  dateTimeHelper.ntpUpdateTime();
 
   char *date = dateTimeHelper.getDateString();
   char *time = dateTimeHelper.getTimeString();
@@ -230,7 +229,10 @@ void initTelegramBot()
 {
   bot.setToken(config.telegramBotToken);
   bot.setChatID(config.telegramChatId);
-  bot.sendMessage("Greenhouse Tracker started");
+
+  String message = "Greenhouse Tracker is up and running.\n";
+  message += "Local time is " + String(dateTimeHelper.getDateTimeString());
+  bot.sendMessage(message);
 }
 
 void telegramNotifications(byte temperature, byte humidity)
