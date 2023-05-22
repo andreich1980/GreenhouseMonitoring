@@ -20,7 +20,7 @@ The config file should be stored on the LittleFS filesystem in the `/config.json
 
 * `telegram_bot_token` (string): The API token for the Telegram bot that will be used for notifications.
 * `telegram_chat_id` (string): The chat ID for the Telegram chat that will receive notifications.
-Use [@myidbot](https://t.me/myidbot) to find out the chat ID of an individual or a group.
+Use [@myidbot](https://t.me/myidbot) to find out the chat ID of an individual or a group. Could contain a few chat IDs, comma separated.
 * `temperature_min`, `temperature_max` (integer): When the temperature goes out of these boundaries, the bot will send a notification.
 * `thingspeak_channel_id` (integer): Channel ID on [ThingSpeak.com](https://thingspeak.com).
 * `thingspeak_write_api_key` (integer): Write API Key for the channel.
