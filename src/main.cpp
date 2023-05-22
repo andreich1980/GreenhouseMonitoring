@@ -38,6 +38,7 @@ void saveConfig();
 
 esp8266::polledTimeout::periodicMs timeout_20s(20 * 1000);
 esp8266::polledTimeout::periodicMs timeout_10min(10 * 60 * 1000);
+esp8266::polledTimeout::periodicMs timeout_30min(30 * 60 * 1000);
 
 FastBot bot;
 void initTelegramBot();
@@ -71,6 +72,18 @@ void setup()
 void loop()
 {
   bot.tick();
+
+  if (timeout_30min)
+  {
+    Serial.println("Reading sensors to check the battery level...");
+    temperature = (int)dht.readTemperature();
+    humidity = (int)dht.readHumidity();
+
+    if (temperature == 255 && humidity == 255)
+    {
+      telegramNotifications(temperature, humidity, true);
+    }
+  }
 
   if (timeout_10min)
   {
@@ -197,6 +210,12 @@ void initTelegramBot()
   bot.attach(telegramProcessIncomingMessages);
 
   bot.sendMessage("Greenhouse Tracker is up and running.");
+
+  // commands list format: [{"command":"status","description":"Get current status"}]}
+  // dont' forget to escape double quotes
+  uint8 result = bot.sendCommand("/setMyCommands?commands=[{\"command\":\"status\",\"description\":\"Get current status\"},{\"command\":\"url\",\"description\":\"Show web-interface URL\"}]");
+  Serial.print("Setting bot commands: ");
+  Serial.println(result);
 }
 
 void telegramNotifications(byte temperature, byte humidity)
@@ -206,6 +225,12 @@ void telegramNotifications(byte temperature, byte humidity)
 
 void telegramNotifications(byte temperature, byte humidity, bool forceSend)
 {
+  if (temperature == 255 && humidity == 255 && forceSend)
+  {
+    bot.sendMessage("🪫 The battery is running low and requires replacement");
+    return;
+  }
+
   String data = "Temperature: " + String(temperature) + "°C";
   data += '\n';
   data += "Humidity: " + String(humidity) + "%";
@@ -230,6 +255,13 @@ void telegramProcessIncomingMessages(FB_msg &message)
   Serial.print(message.username);
   Serial.print(": ");
   Serial.println(message.text);
+
+  if (message.text == "/url")
+  {
+    bot.sendMessage("Web-interface URL is https://smart-home-interface.netlify.app");
+    uint32 messageId = bot.lastBotMsg();
+    bot.pinMessage(messageId);
+  }
 
   if (message.text == "/status")
   {
