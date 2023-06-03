@@ -10,14 +10,22 @@
 WiFiManager wifiManager;
 void initWiFiManager();
 
-Led led(D2);
+Led led(D6);
 
 // DHT sensor
-uint8_t DHT_PIN = D1;
-DHT dht(DHT_PIN, DHT11);
-byte temperature = 0;
-byte humidity = 0;
-void initDhtSensor();
+uint8_t DHT_POWER_PIN = D1;
+uint8_t DHT_DATA_PIN = D2;
+struct DhtSensorData
+{
+  unsigned int temperature : 8; // 8 bits (range: 0-255)
+  unsigned int humidity : 8;
+};
+// DhtSensorData prevSensorData = {
+//   temperature : 0,
+//   humidity : 0
+// };
+DhtSensorData readDhtSensor();
+void processDhtSensorData(DhtSensorData);
 
 // File system
 void initFS();
@@ -36,70 +44,65 @@ const char *configFileName = "/config.json";
 void loadConfig();
 void saveConfig();
 
-esp8266::polledTimeout::periodicMs timeout_20s(20 * 1000);
-esp8266::polledTimeout::periodicMs timeout_10min(10 * 60 * 1000);
-esp8266::polledTimeout::periodicMs timeout_30min(30 * 60 * 1000);
-
+// Telegram bot
 FastBot bot;
-void initTelegramBot();
-void telegramNotifications(byte temperature, byte humidity);
-void telegramNotifications(byte temperature, byte humidity, bool forceSend);
+void initTelegramBot(bool isWakeUp);
+bool shouldMuteColdNotifications = false;
+bool shouldMuteHotNotifications = false;
+void telegramNotifications(DhtSensorData sensorData);
+void telegramNotifications(DhtSensorData sensorData, bool forceSend);
 void telegramProcessIncomingMessages(FB_msg &message);
 
 // ThingSpeak
 WiFiClient client;
-void sendToThingSpeak(byte temperature, byte humidity);
+void sendToThingSpeak(DhtSensorData sensorData);
 
 void setup()
 {
   Serial.begin(115200);
-  Serial.println("Starting");
+  while (!Serial)
+  {
+    // Waiting for Serial to be ready...
+  }
+  delay(1000);
 
-  initWiFiManager();
+  bool isWakeUp = false;
+  struct rst_info *resetInfo = system_get_rst_info();
+  if (resetInfo->reason == REASON_DEEP_SLEEP_AWAKE)
+  {
+    Serial.println("Device woke up...");
+    isWakeUp = true;
+  }
+  else
+  {
+    Serial.println("Device started...");
+  }
 
-  initDhtSensor();
+  Serial.print("Should mute flags: ");
+  Serial.print(shouldMuteColdNotifications ? "yes, " : "no, ");
+  Serial.println(shouldMuteHotNotifications ? "yes." : "no.");
+
   initFS();
-
   loadConfig();
 
-  initTelegramBot();
+  initWiFiManager();
+  initTelegramBot(isWakeUp);
 
-  ThingSpeak.begin(client);
+  led.blink(100, 50, 3);
 
-  led.blink(50, 100, 5);
+  DhtSensorData sensorData = readDhtSensor();
+  processDhtSensorData(sensorData);
+
+  Serial.println("Going to sleep...");
+  // The chip will make RF calibration after waking up from Deep-sleep. Power consumption is high.
+  system_deep_sleep_set_option(1);
+  // Sleep for 10 minutes (in microseconds)
+  ESP.deepSleep(600e6);
 }
 
 void loop()
 {
-  bot.tick();
-
-  if (timeout_30min)
-  {
-    Serial.println("Reading sensors to check the battery level...");
-    temperature = (int)dht.readTemperature();
-    humidity = (int)dht.readHumidity();
-
-    if (temperature == 255 && humidity == 255)
-    {
-      telegramNotifications(temperature, humidity, true);
-    }
-  }
-
-  if (timeout_10min)
-  {
-    Serial.println("Reading sensors...");
-    temperature = (int)dht.readTemperature();
-    humidity = (int)dht.readHumidity();
-
-    sendToThingSpeak(temperature, humidity);
-
-    telegramNotifications(temperature, humidity);
-  }
-
-  if (timeout_20s)
-  {
-    led.blink(50);
-  }
+  //
 }
 
 void initWiFiManager()
@@ -109,11 +112,46 @@ void initWiFiManager()
   wifiManager.autoConnect("GH-MONITORING", "CUCUMBERS");
 }
 
-void initDhtSensor()
+DhtSensorData readDhtSensor()
 {
-  Serial.println("Init DHT sensor...");
-  pinMode(DHT_PIN, INPUT);
+  Serial.println("Initializing DHT sensor...");
+  pinMode(DHT_POWER_PIN, OUTPUT);
+  pinMode(DHT_DATA_PIN, INPUT);
+
+  digitalWrite(DHT_POWER_PIN, HIGH);
+  delay(1000);
+  DHT dht(DHT_DATA_PIN, DHT11);
   dht.begin();
+
+  Serial.println("Reading sensor...");
+  DhtSensorData data;
+  data.temperature = (int)dht.readTemperature();
+  data.humidity = (int)dht.readHumidity();
+  Serial.print(data.temperature);
+  Serial.print("°C, ");
+  Serial.print(data.humidity);
+  Serial.println("%");
+
+  digitalWrite(DHT_POWER_PIN, LOW);
+
+  return data;
+}
+
+void processDhtSensorData(DhtSensorData sensorData)
+{
+  // Low battery - send Telegram notification
+  if (sensorData.temperature == 255 && sensorData.humidity == 255)
+  {
+    telegramNotifications(sensorData, true);
+  }
+  // Otherwise, send data to ThingSpeak API, only send Telegram notification about extreme temperatures.
+  else
+  {
+    ThingSpeak.begin(client);
+    sendToThingSpeak(sensorData);
+
+    telegramNotifications(sensorData);
+  }
 }
 
 void initFS()
@@ -203,43 +241,74 @@ void saveConfig()
   file.close();
 }
 
-void initTelegramBot()
+void initTelegramBot(bool isWakeUp)
 {
+  Serial.println("Initializing Telegram bot...");
   bot.setToken(config.telegramBotToken);
   bot.setChatID(config.telegramChatId);
-  bot.attach(telegramProcessIncomingMessages);
+  // bot.attach(telegramProcessIncomingMessages);
+  // bot.tickManual();
 
-  bot.sendMessage("Greenhouse Tracker is up and running.");
+  if (!isWakeUp)
+  {
+    bot.sendMessage("Greenhouse Tracker is up and running.");
+  }
 
   // commands list format: [{"command":"status","description":"Get current status"}]}
   // dont' forget to escape double quotes
-  uint8 result = bot.sendCommand("/setMyCommands?commands=[{\"command\":\"status\",\"description\":\"Get current status\"},{\"command\":\"url\",\"description\":\"Show web-interface URL\"}]");
-  Serial.print("Setting bot commands: ");
-  Serial.println(result);
+  // uint8 result = bot.sendCommand("/setMyCommands?commands=["
+  //                                "{\"command\":\"start\",\"description\":\"Unsubscribe from all the notifications\"},"
+  //                                "{\"command\":\"stop\",\"description\":\"Subscribe to notifications about extreme temperatures\"},"
+  //                                "{\"command\":\"mute_cold_notifications\",\"description\":\"Mute notifications about temperature is too low\"},"
+  //                                "{\"command\":\"mute_hot_notifications\",\"description\":\"Mute notifications about temperature is too high\"},"
+  //                                "{\"command\":\"help\",\"description\":\"Commands description\"}"
+  //                                "]");
+  // Serial.print("Setting bot commands... ");
+  // if (result == 1)
+  // {
+  //   Serial.println("OK");
+  // }
+  // else
+  // {
+  //   Serial.print("Error code ");
+  //   Serial.println(result);
+  // }
 }
 
-void telegramNotifications(byte temperature, byte humidity)
+void telegramNotifications(DhtSensorData sensorData)
 {
-  telegramNotifications(temperature, humidity, false);
+  telegramNotifications(sensorData, false);
 }
 
-void telegramNotifications(byte temperature, byte humidity, bool forceSend)
+void telegramNotifications(DhtSensorData sensorData, bool forceSend)
 {
-  if (temperature == 255 && humidity == 255 && forceSend)
+  if (sensorData.temperature == 255 && sensorData.humidity == 255)
   {
     bot.sendMessage("🪫 The battery is running low and requires replacement");
     return;
   }
 
-  String data = "Temperature: " + String(temperature) + "°C";
+  String data = "Temperature: " + String(sensorData.temperature) + "°C";
   data += '\n';
-  data += "Humidity: " + String(humidity) + "%";
+  data += "Humidity: " + String(sensorData.humidity) + "%";
 
-  if (temperature < config.minTemperature)
+  // Reset mute flags if the previous temperature has the opposite extreme value
+  // if (sensorData.temperature < config.minTemperature && prevSensorData.temperature > config.maxTemperature)
+  // {
+  //   Serial.println("Unmute cold temperature notifications");
+  //   shouldMuteColdNotifications = false;
+  // }
+  // if (sensorData.temperature > config.maxTemperature && prevSensorData.temperature < config.minTemperature)
+  // {
+  //   Serial.println("Unmute hot temperature notifications");
+  //   shouldMuteHotNotifications = false;
+  // }
+
+  if (sensorData.temperature < config.minTemperature && !shouldMuteColdNotifications)
   {
     bot.sendMessage("🥶 It's too cold in the greenhouse!\n" + data);
   }
-  else if (temperature > config.maxTemperature)
+  else if (sensorData.temperature > config.maxTemperature && !shouldMuteColdNotifications)
   {
     bot.sendMessage("🥵 It's too hot in the greenhouse!\n" + data);
   }
@@ -247,6 +316,8 @@ void telegramNotifications(byte temperature, byte humidity, bool forceSend)
   {
     bot.sendMessage(data);
   }
+
+  // prevSensorData = sensorData;
 }
 
 void telegramProcessIncomingMessages(FB_msg &message)
@@ -256,25 +327,29 @@ void telegramProcessIncomingMessages(FB_msg &message)
   Serial.print(": ");
   Serial.println(message.text);
 
-  if (message.text == "/url")
+  if (message.text == "/start")
   {
-    bot.sendMessage("Web-interface URL is https://smart-home-interface.netlify.app");
-    uint32 messageId = bot.lastBotMsg();
-    bot.pinMessage(messageId);
+    bot.sendMessage("I will notify you about extreme temperatures.");
   }
 
-  if (message.text == "/status")
+  if (message.text == "/stop")
   {
-    Serial.println("Reading sensors...");
+    bot.sendMessage("You will not receive any notifications from now on.");
+  }
 
-    temperature = (int)dht.readTemperature();
-    humidity = (int)dht.readHumidity();
-
-    telegramNotifications(temperature, humidity, true);
+  if (message.text.startsWith("/mute_cold_notifications"))
+  {
+    shouldMuteColdNotifications = true;
+    bot.sendMessage("Muted until the next time temperature drops below the minimum.");
+  }
+  else if (message.text.startsWith("/mute_hot_notifications"))
+  {
+    shouldMuteHotNotifications = true;
+    bot.sendMessage("Muted until the next time temperature rises above the maximum.");
   }
 }
 
-void sendToThingSpeak(byte temperature, byte humidity)
+void sendToThingSpeak(DhtSensorData sensorData)
 {
   if (!config.thingSpeakChannelId)
   {
@@ -283,8 +358,8 @@ void sendToThingSpeak(byte temperature, byte humidity)
 
   Serial.println("ThingSpeak: sending data... ");
 
-  ThingSpeak.setField(1, temperature);
-  ThingSpeak.setField(2, humidity);
+  ThingSpeak.setField(1, (int)sensorData.temperature);
+  ThingSpeak.setField(2, (int)sensorData.humidity);
 
   int responseCode = ThingSpeak.writeFields(config.thingSpeakChannelId, config.thingSpeakChannelWriteApiKey);
   if (responseCode == 200)
