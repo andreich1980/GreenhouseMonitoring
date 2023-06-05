@@ -20,10 +20,6 @@ struct DhtSensorData
   unsigned int temperature : 8; // 8 bits (range: 0-255)
   unsigned int humidity : 8;
 };
-// DhtSensorData prevSensorData = {
-//   temperature : 0,
-//   humidity : 0
-// };
 DhtSensorData readDhtSensor();
 void processDhtSensorData(DhtSensorData);
 
@@ -40,17 +36,25 @@ struct Config
   char thingSpeakChannelWriteApiKey[17];
 };
 Config config;
-const char *configFileName = "/config.json";
+const char *configFilename = "/config.json";
 void loadConfig();
 void saveConfig();
 
 // Telegram bot
 FastBot bot;
 void initTelegramBot(bool isWakeUp);
-bool shouldMuteColdNotifications = false;
-bool shouldMuteHotNotifications = false;
-void telegramNotifications(DhtSensorData sensorData);
-void telegramNotifications(DhtSensorData sensorData, bool forceSend);
+struct TelegramNotificationConfig
+{
+  bool shouldMuteColdNotifications;
+  bool shouldMuteHotNotifications;
+  DhtSensorData prevDhtSensorData;
+};
+TelegramNotificationConfig telegramNotificationsConfig;
+const char *telegramNotificationsConfigFilename = "/tg_config.json";
+void loadTelegramNotificationsConfig();
+void saveTelegramNotificationsConfig();
+void telegramNotifications(DhtSensorData);
+void telegramNotifications(DhtSensorData, bool forceSend);
 void telegramProcessIncomingMessages(FB_msg &message);
 
 // ThingSpeak
@@ -65,6 +69,7 @@ void setup()
     // Waiting for Serial to be ready...
   }
   delay(1000);
+  Serial.println();
 
   bool isWakeUp = false;
   struct rst_info *resetInfo = system_get_rst_info();
@@ -78,14 +83,11 @@ void setup()
     Serial.println("Device started...");
   }
 
-  Serial.print("Should mute flags: ");
-  Serial.print(shouldMuteColdNotifications ? "yes, " : "no, ");
-  Serial.println(shouldMuteHotNotifications ? "yes." : "no.");
-
   initFS();
   loadConfig();
 
   initWiFiManager();
+  loadTelegramNotificationsConfig();
   initTelegramBot(isWakeUp);
 
   led.blink(100, 50, 3);
@@ -166,7 +168,7 @@ void initFS()
 
 void loadConfig()
 {
-  File file = LittleFS.open(configFileName, "r");
+  File file = LittleFS.open(configFilename, "r");
   if (!file)
   {
     Serial.println("Failed to open config file.");
@@ -208,12 +210,12 @@ void loadConfig()
 
 void saveConfig()
 {
-  if (LittleFS.exists(configFileName))
+  if (LittleFS.exists(configFilename))
   {
-    LittleFS.remove(configFileName);
+    LittleFS.remove(configFilename);
   }
 
-  File file = LittleFS.open(configFileName, "w");
+  File file = LittleFS.open(configFilename, "w");
   if (!file)
   {
     Serial.println("Failed to store config file.");
@@ -246,24 +248,22 @@ void initTelegramBot(bool isWakeUp)
   Serial.println("Initializing Telegram bot...");
   bot.setToken(config.telegramBotToken);
   bot.setChatID(config.telegramChatId);
-  // bot.attach(telegramProcessIncomingMessages);
-  // bot.tickManual();
+  bot.attach(telegramProcessIncomingMessages);
+  bot.tick();
 
   if (!isWakeUp)
   {
     bot.sendMessage("Greenhouse Tracker is up and running.");
   }
 
-  // commands list format: [{"command":"status","description":"Get current status"}]}
-  // dont' forget to escape double quotes
-  // uint8 result = bot.sendCommand("/setMyCommands?commands=["
-  //                                "{\"command\":\"start\",\"description\":\"Unsubscribe from all the notifications\"},"
-  //                                "{\"command\":\"stop\",\"description\":\"Subscribe to notifications about extreme temperatures\"},"
-  //                                "{\"command\":\"mute_cold_notifications\",\"description\":\"Mute notifications about temperature is too low\"},"
-  //                                "{\"command\":\"mute_hot_notifications\",\"description\":\"Mute notifications about temperature is too high\"},"
-  //                                "{\"command\":\"help\",\"description\":\"Commands description\"}"
-  //                                "]");
-  // Serial.print("Setting bot commands... ");
+  uint8 result;
+
+  // Serial.print("Setting bot description... ");
+  // result = bot.sendCommand("/setMyDescription?description="
+  //                          "Hi! I'm your greenhouse assistant.\n"
+  //                          "I'll alert you when the temperature in your greenhouse gets too high/low.\n"
+  //                          "I check for new messages every 10 minutes.\n"
+  //                          "Let's grow some amazing plants together!");
   // if (result == 1)
   // {
   //   Serial.println("OK");
@@ -273,6 +273,93 @@ void initTelegramBot(bool isWakeUp)
   //   Serial.print("Error code ");
   //   Serial.println(result);
   // }
+
+  Serial.print("Setting bot commands... ");
+  // commands list format: [{"command":"status","description":"Get current status"}]}
+  // dont' forget to escape double quotes
+  result = bot.sendCommand("/setMyCommands?commands=["
+                           "{\"command\":\"start\",\"description\":\"Unsubscribe from all the notifications\"},"
+                           "{\"command\":\"stop\",\"description\":\"Subscribe to notifications about extreme temperatures\"},"
+                           "{\"command\":\"mute_cold_notifications\",\"description\":\"Mute notifications about temperature is too low\"},"
+                           "{\"command\":\"mute_hot_notifications\",\"description\":\"Mute notifications about temperature is too high\"},"
+                           "{\"command\":\"help\",\"description\":\"Commands description\"}"
+                           "]");
+  if (result == 1)
+  {
+    Serial.println("OK");
+  }
+  else
+  {
+    Serial.print("Error code ");
+    Serial.println(result);
+  }
+}
+
+void loadTelegramNotificationsConfig()
+{
+  File file = LittleFS.open(telegramNotificationsConfigFilename, "r");
+  if (!file)
+  {
+    Serial.println("Failed to open Telegram notifications config file.");
+    return;
+  }
+
+  StaticJsonDocument<192> doc;
+
+  DeserializationError error = deserializeJson(doc, file);
+  if (error)
+  {
+    Serial.println("Failed to read Telegram notifications config file, using default configuration.");
+    Serial.println(error.c_str());
+  }
+  else
+  {
+    Serial.println("Loaded Telegram notifications config file.");
+  }
+
+  file.close();
+
+  telegramNotificationsConfig.shouldMuteColdNotifications = doc["mute_cold_notifications"] | false;
+  telegramNotificationsConfig.shouldMuteHotNotifications = doc["mute_hot_notifications"] | false;
+  telegramNotificationsConfig.prevDhtSensorData.temperature = doc["prev_temperature"] | 20;
+  telegramNotificationsConfig.prevDhtSensorData.humidity = doc["prev_humidity"] | 40;
+
+  Serial.print("Should mute flags: ");
+  Serial.print(telegramNotificationsConfig.shouldMuteColdNotifications ? "yes, " : "no, ");
+  Serial.println(telegramNotificationsConfig.shouldMuteHotNotifications ? "yes." : "no.");
+}
+
+void saveTelegramNotificationsConfig()
+{
+  if (LittleFS.exists(telegramNotificationsConfigFilename))
+  {
+    LittleFS.remove(telegramNotificationsConfigFilename);
+  }
+
+  File file = LittleFS.open(telegramNotificationsConfigFilename, "w");
+  if (!file)
+  {
+    Serial.println("Failed to store config file.");
+    return;
+  }
+
+  StaticJsonDocument<384> doc;
+
+  doc["mute_cold_notifications"] = telegramNotificationsConfig.shouldMuteColdNotifications;
+  doc["mute_hot_notifications"] = telegramNotificationsConfig.shouldMuteHotNotifications;
+  doc["prev_temperature"] = telegramNotificationsConfig.prevDhtSensorData.temperature;
+  doc["prev_humidity"] = telegramNotificationsConfig.prevDhtSensorData.humidity;
+
+  if (serializeJsonPretty(doc, file))
+  {
+    Serial.println("Telegram notifications config file stored");
+  }
+  else
+  {
+    Serial.println("Failed to store Telegram notifications config file.");
+  }
+
+  file.close();
 }
 
 void telegramNotifications(DhtSensorData sensorData)
@@ -292,23 +379,27 @@ void telegramNotifications(DhtSensorData sensorData, bool forceSend)
   data += '\n';
   data += "Humidity: " + String(sensorData.humidity) + "%";
 
-  // Reset mute flags if the previous temperature has the opposite extreme value
-  // if (sensorData.temperature < config.minTemperature && prevSensorData.temperature > config.maxTemperature)
-  // {
-  //   Serial.println("Unmute cold temperature notifications");
-  //   shouldMuteColdNotifications = false;
-  // }
-  // if (sensorData.temperature > config.maxTemperature && prevSensorData.temperature < config.minTemperature)
-  // {
-  //   Serial.println("Unmute hot temperature notifications");
-  //   shouldMuteHotNotifications = false;
-  // }
+  // Reset mute flags if the previous temperature were normal
+  if (
+      sensorData.temperature < config.minTemperature &&
+      telegramNotificationsConfig.prevDhtSensorData.temperature >= config.minTemperature)
+  {
+    Serial.println("Unmute cold temperature notifications");
+    telegramNotificationsConfig.shouldMuteColdNotifications = false;
+  }
+  if (
+      sensorData.temperature > config.maxTemperature &&
+      telegramNotificationsConfig.prevDhtSensorData.temperature <= config.maxTemperature)
+  {
+    Serial.println("Unmute hot temperature notifications");
+    telegramNotificationsConfig.shouldMuteHotNotifications = false;
+  }
 
-  if (sensorData.temperature < config.minTemperature && !shouldMuteColdNotifications)
+  if (sensorData.temperature < config.minTemperature && !telegramNotificationsConfig.shouldMuteColdNotifications)
   {
     bot.sendMessage("🥶 It's too cold in the greenhouse!\n" + data);
   }
-  else if (sensorData.temperature > config.maxTemperature && !shouldMuteColdNotifications)
+  else if (sensorData.temperature > config.maxTemperature && !telegramNotificationsConfig.shouldMuteHotNotifications)
   {
     bot.sendMessage("🥵 It's too hot in the greenhouse!\n" + data);
   }
@@ -317,7 +408,9 @@ void telegramNotifications(DhtSensorData sensorData, bool forceSend)
     bot.sendMessage(data);
   }
 
-  // prevSensorData = sensorData;
+  telegramNotificationsConfig.prevDhtSensorData = sensorData;
+
+  saveTelegramNotificationsConfig();
 }
 
 void telegramProcessIncomingMessages(FB_msg &message)
@@ -339,14 +432,19 @@ void telegramProcessIncomingMessages(FB_msg &message)
 
   if (message.text.startsWith("/mute_cold_notifications"))
   {
-    shouldMuteColdNotifications = true;
+    telegramNotificationsConfig.shouldMuteColdNotifications = true;
     bot.sendMessage("Muted until the next time temperature drops below the minimum.");
   }
   else if (message.text.startsWith("/mute_hot_notifications"))
   {
-    shouldMuteHotNotifications = true;
+    telegramNotificationsConfig.shouldMuteHotNotifications = true;
     bot.sendMessage("Muted until the next time temperature rises above the maximum.");
   }
+
+  saveTelegramNotificationsConfig();
+
+  // To mark messages as read
+  bot.tickManual();
 }
 
 void sendToThingSpeak(DhtSensorData sensorData)
