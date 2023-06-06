@@ -1,0 +1,8 @@
+{
+    "telegram_bot_token": "111111111:TelegramBotApiToken",
+    "telegram_chat_id": "123456789,987654321",
+    "temperature_min": 20,
+    "temperature_max": 24,
+    "thingspeak_channel_id": 1111111,
+    "thingspeak_write_api_key": "THINGSPEAK API KEY"
+  }
