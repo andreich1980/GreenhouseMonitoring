@@ -258,28 +258,11 @@ void initTelegramBot(bool isWakeUp)
 
   uint8 result;
 
-  // Serial.print("Setting bot description... ");
-  // result = bot.sendCommand("/setMyDescription?description="
-  //                          "Hi! I'm your greenhouse assistant.\n"
-  //                          "I'll alert you when the temperature in your greenhouse gets too high/low.\n"
-  //                          "I check for new messages every 10 minutes.\n"
-  //                          "Let's grow some amazing plants together!");
-  // if (result == 1)
-  // {
-  //   Serial.println("OK");
-  // }
-  // else
-  // {
-  //   Serial.print("Error code ");
-  //   Serial.println(result);
-  // }
-
   Serial.print("Setting bot commands... ");
   // commands list format: [{"command":"status","description":"Get current status"}]}
   // dont' forget to escape double quotes
   result = bot.sendCommand("/setMyCommands?commands=["
-                           "{\"command\":\"start\",\"description\":\"Unsubscribe from all the notifications\"},"
-                           "{\"command\":\"stop\",\"description\":\"Subscribe to notifications about extreme temperatures\"},"
+                           "{\"command\":\"start\",\"description\":\"Subscribe to notifications about extreme temperatures\"},"
                            "{\"command\":\"mute_cold_notifications\",\"description\":\"Mute notifications about temperature is too low\"},"
                            "{\"command\":\"mute_hot_notifications\",\"description\":\"Mute notifications about temperature is too high\"},"
                            "{\"command\":\"help\",\"description\":\"Commands description\"}"
@@ -422,23 +405,29 @@ void telegramProcessIncomingMessages(FB_msg &message)
 
   if (message.text == "/start")
   {
-    bot.sendMessage("I will notify you about extreme temperatures.");
+    bot.sendMessage(
+        "👋 Hi! I'm your greenhouse assistant 🌱🌡️🔔📈.\n"
+        "🔔 I'll alert you when the temperature in your greenhouse gets too high/low.\n"
+        "⏰I check for new messages every 10 minutes (due to power saving mode 💤).\n"
+        "Let's grow some amazing plants together! 🌱💡🤖");
   }
 
-  if (message.text == "/stop")
-  {
-    bot.sendMessage("You will not receive any notifications from now on.");
-  }
-
-  if (message.text.startsWith("/mute_cold_notifications"))
+  if (message.text == "/mute_cold_notifications")
   {
     telegramNotificationsConfig.shouldMuteColdNotifications = true;
     bot.sendMessage("Muted until the next time temperature drops below the minimum.");
   }
-  else if (message.text.startsWith("/mute_hot_notifications"))
+  else if (message.text == "/mute_hot_notifications")
   {
     telegramNotificationsConfig.shouldMuteHotNotifications = true;
     bot.sendMessage("Muted until the next time temperature rises above the maximum.");
+  }
+
+  if (message.text == "/help")
+  {
+    bot.sendMessage("/start - Print out an introductory message"
+                    "/mute_cold_notifications - Temporarily mute notifications about low temperatures until the temperature gets back to normal and then gets too low again."
+                    "/mute_hot_notifications - Temporarily mute notifications about high temperatures until the temperature gets back to normal and then gets too high again.");
   }
 
   saveTelegramNotificationsConfig();

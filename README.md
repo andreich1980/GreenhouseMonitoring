@@ -1,4 +1,8 @@
-# Greenhouse tracking
+# Greenhouse Tracking
+
+This application uses deep sleep mode, wakes up every 10 minutes, reads the sensor (temperature, humidity), and sends Telegram notifications if the temperature is out of the "comfort zone".
+
+The user can temporarily mute cold/hot notifications using a relevant Telegram bot command. In this case, the bot will send that notification only after the temperature gets back to the "comfort zone" and then gets too cold/hot again.
 
 ## Config file
 
